@@ -1,9 +1,9 @@
 # iFTPMonitor
-Based on IBM i (AS400) server exit point QIBM_QTMX_SVR_LOGON and QIBM_QTMF_CLIENT_REQ, you can easily
+Based on IBM i (AS400) server exit point QIBM_QTMX_SVR_LOGON and QIBM_QTMF_CLIENT_REQ, with customizing configuration files you can easily
   - manage user logon settings
   - authorize data accesses for specific users
   - generate audit log for all files accessed per user
-with customizing configuration files. 
+ 
 
 
 ## Configruation
