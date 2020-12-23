@@ -8,6 +8,9 @@ Based on IBM i (AS400) server exit point QIBM_QTMX_SVR_LOGON and QIBM_QTMF_CLIEN
 
 ## Configruation
 ```sh
+#### Create production libary ##################################
+> CRTLIB LIB(IFTPMON) TEXT('FTP MONITOR')
+
 #### Create logon user table ###################################
 > CREATE TABLE IFTPMON.LGNUSRS (
   SRCUSR CHAR (11) CCSID 37 NOT NULL WITH DEFAULT PRIMARY KEY,                                           
@@ -54,16 +57,16 @@ Based on IBM i (AS400) server exit point QIBM_QTMX_SVR_LOGON and QIBM_QTMF_CLIEN
 ```
 ### Installation
 ```sh
-> CRTLIB LIB(IFTPMON) TEXT('FTP MONITOR')
-
 > ADDLIBL LIBL(IFTPMON)
 
 > QSYS/CRTBNDRPG PGM(IFTPMON/FTPUSRMGR) SRCSTMF('/IFTPMON/ftpusrmgr.rpgle') TGTCCSID(*JOB)
 
-> QSYS/CRTBNDRPG PGM(IFTPMON/FTPUSRMGR) SRCSTMF('/IFTPMON/ftpusrmgr.rpgle') TGTCCSID(*JOB)                              
+> QSYS/CRTBNDRPG PGM(IFTPMON/FTPACTMGR) SRCSTMF('/IFTPMON/ftpactmgr.rpgle') TGTCCSID(*JOB)                              
 
+#### Add FTPUSRMGR into logon exit point 
 > WRKREGINF EXITPNT(QIBM_QTMF_SVR_LOGON) FORMAT(TCPL0300)
 
+#### Add FTPACTMGR into request  exit point 
 > WRKREGINF EXITPNT(QIBM_QTMF_CLIENT_REQ) FORMAT(VLRQ0100)
 
 > ENDTCPSVR SERVER(*FTP) 
@@ -74,6 +77,7 @@ Based on IBM i (AS400) server exit point QIBM_QTMX_SVR_LOGON and QIBM_QTMF_CLIEN
 ## Usage
 
 ### Configure logon user control 
+Note: QCCSID is not 65535 for STRSQL to have implicit conversion.
 
 ```sh
 > INSERT INTO IFTPMON.LGNUSRS VALUES(
@@ -88,9 +92,26 @@ Based on IBM i (AS400) server exit point QIBM_QTMX_SVR_LOGON and QIBM_QTMF_CLIEN
 ### Configure request permisson control
 
 ```sh
+#### Allow user to a specific diretory
 > INSERT INTO IFTPMON.OPPERM  VALUES(
     'SRCUSR', 3,                     
-    '/HOME/URDIR', 1)                  
+    '/HOME', 1)
+
+#### Allow user to access generic directories
+> INSERT INTO IFTPMON.OPPERM  VALUES(
+    'SRCUSR', 3,                     
+    '/QIB*', 1)
+
+#### Disallow user to access a specific diretory
+> INSERT INTO IFTPMON.OPPERM  VALUES(
+    'SRCUSR', 3,                     
+    '/HOME', 0)
+
+#### Disallow user to access generic directories
+> INSERT INTO IFTPMON.OPPERM  VALUES(
+    'SRCUSR', 3,                     
+    '/HOME', 0)
+                  
 ```
 
 ### View audit log for files accessed

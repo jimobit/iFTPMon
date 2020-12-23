@@ -50,29 +50,31 @@ dcl-proc FtpUsrMgr;
       when ALWLGN = 0;
         pAlwLgn = 0;
       when ALWLGN =  1;
-        if AUTHSTR <> *blanks and pAuthStr <> AUTHSTR;
+        // rules go here
+        if AUTHSTR <> *blanks and %subst(pAuthStr:1:pAuthStrLen) <> %trim(AUTHSTR)
+            or
+           CLNTIP <> *blanks and %subst(pClntIP:1:pClntIPLen) = %trim(CLNTIP);
           pAlwLgn = 0;
         endif;
       when ALWLGN =  2;
+        // rules go here
+        pAlwLgn = ALWLGN;
       when ALWLGN =  3;
+        // rules go here
         pAlwLgn = ALWLGN;
       other;
         pAlwLgn = DFT_LGN_ALW;
-      endsl; 
+      endsl;                                      
 
-      if pAlwLgn <> 0 and CLNTIP <> *blanks and pClntIP <> CLNTIP;
-        pAlwLgn = 0;
-      endif;                                       
-
-      pTgtUsr = TGTUSR;
-      pAuthStrLen = %len(pTgtUsr);
+      pTgtUsr = %trim(TGTUSR);
+      pAuthStrLen = %len(%trim(pTgtUsr));
       pAuthCCSID = 0;
-      pTgtPwd = TGTPWD;
-      pTgtPwdLen = %len(pTgtPwd);
+      pTgtPwd = %trim(TGTPWD);
+      pTgtPwdLen = %len(%trim(pTgtPwd));
       pTgtCCSID = 0;
       pCurLib = CURLIB;
-      pHomeDir = HOMEDIR; 
-      pHomeDirLen = %len(pHomeDir); 
+      pHomeDir = %trim(HOMEDIR); 
+      pHomeDirLen = %len(%trim(pHomeDir)); 
       pHDCCSID = 0;
 
       pAppSpec.nameFmt = NAMEFMT; 

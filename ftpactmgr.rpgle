@@ -12,6 +12,12 @@ dcl-f OPAUD disk(*EXT) usage(*INPUT:*OUTPUT) extfile(FTPOPAUD)
 
 dcl-s WILDCARD ucs2(1) inz(%ucs2('*'));
 
+// todo - 1) use QlgConvertCase(). 2) QOpenSys is case-sensitive. 
+dcl-s lo2 ucs2(26) inz(%ucs2('abcdefghijklmnopqrstuvwxyz'));
+dcl-s up2 ucs2(26) inz(%ucs2('ABCDEFGHIJKLMNOPQRSTUVWXYZ'));
+dcl-s lo char(26);
+dcl-s up char(26);
+
 dcl-ds dsOpPermK likerec(OPPERMR : *key);
 dcl-ds dsOpAud likerec(OPAUD.OPAUD:*output);
 
@@ -48,7 +54,9 @@ dcl-pr doOpAud;
   dcl-parm pUser                char(10);
   dcl-parm pOpId                int(10) value;
   dcl-parm pOpInfo              char(255);
+  dcl-parm pOpInfoLen           int(10) value;
   dcl-parm pRmtIp               char(255);
+  dcl-parm pRmtIpLen            int(10) value;
   dcl-parm pAllow               int(10);
 end-pr;
 
@@ -64,6 +72,9 @@ dcl-proc FtpActMgr;
     pAllow              int(10); 
   end-pi;
 
+  lo = %char(lo2);
+  up = %char(up2);
+
   pAllow = DFT_REQ_ALW;
 
   open(E) OPPERM;
@@ -78,35 +89,38 @@ dcl-proc FtpActMgr;
     close(E) OPPERM;
     return;
   endif;
-  read(E) OPPERM;
-  if %error;
-    close(E) OPPERM;
-    return;
+
+  if %found;
+    read(E) OPPERM;
+    if %error;
+      close(E) OPPERM;
+      return;
+    endif;
+
+    select;
+      when pOpId = 0; // New connection for client.
+      when pOpId = 1; // MKD, XMDK
+        doOpInfo(pOpId:pOpInfo:pOpInfoLen:pAllow);
+      when pOpId = 2; // RMD, XRMD
+        doOpInfo(pOpId:pOpInfo:pOpInfoLen:pAllow);
+      when pOpId = 3; // CWD, CDUP, XCWD, XCUP 
+        doOpInfo(pOpId:pOpInfo:pOpInfoLen:pAllow);
+      when pOpId = 4; // LIST, NLIST
+        doOpInfo(pOpId:pOpInfo:pOpInfoLen:pAllow);
+      when pOpId = 5; // DELE
+        doOpInfo(pOpId:pOpInfo:pOpInfoLen:pAllow);
+      when pOpId = 6; // RETR
+        doOpInfo(pOpId:pOpInfo:pOpInfoLen:pAllow);
+      when pOpId = 7; // APPE, STOR, STOU 
+        doOpInfo(pOpId:pOpInfo:pOpInfoLen:pAllow); 
+      when pOpId = 8; // RNFR, RNTO
+        doOpInfo(pOpId:pOpInfo:pOpInfoLen:pAllow);
+      when pOpId = 9; // RCMD, ADDm, ADDV, CRTL, CRTP, CRTS, DLTF, DLTL
+      other;
+    endsl;
   endif;
 
-  select;
-    when pOpId = 0; // New connection for client.
-    when pOpId = 1; // MKD, XMDK
-      doOpInfo(pOpId:pOpInfo:pOpInfoLen:pAllow);
-    when pOpId = 2; // RMD, XRMD
-    when pOpId = 3; // CWD, CDUP, XCWD, XCUP 
-    when pOpId = 4; // LIST, NLIST
-      doOpInfo(pOpId:pOpInfo:pOpInfoLen:pAllow);
-    when pOpId = 5; // DELE
-      doOpInfo(pOpId:pOpInfo:pOpInfoLen:pAllow);
-    when pOpId = 6; // RETR
-      doOpInfo(pOpId:pOpInfo:pOpInfoLen:pAllow);
-    when pOpId = 7; // APPE, STOR, STOU 
-      doOpInfo(pOpId:pOpInfo:pOpInfoLen:pAllow); 
-    when pOpId = 8; // RNFR, RNTO
-      doOpInfo(pOpId:pOpInfo:pOpInfoLen:pAllow);
-    when pOpId = 9; // RCMD, ADDm, ADDV, CRTL, CRTP, CRTS, DLTF, DLTL
-    other;
-  endsl;
-
-  if pAllow > 0;
-    doOpAud(pUser:pOpId:pOpInfo:pRmtIp:pAllow);
-  endif;
+  doOpAud(pUser:pOpId:pOpInfo:pOpInfoLen:pRmtIp:pRmtIpLen:pAllow);
 
   close(E) OPPERM;
 
@@ -149,20 +163,23 @@ dcl-proc matched;
   dcl-s len int(10) inz(0);
   
   len = %len(%trim(OPINFO));
-  if len = pOpInfoLen;
-    if OPINFO = pOpInfo;
+  if %subst(OPINFO:len:1) = %char(WILDCARD); // end with wildcard?
+    if len <= pOpInfoLen
+      and 
+       %xlate(lo:up:%subst(OPINFO : 1: len-1)) = %xlate(lo:up:%subst(pOpInfo:1:len-1));
+      return *on;
+    else;
+      return *off;
+    endif;
+  elseif len = pOpInfoLen;
+    if %xlate(lo:up:%subst(OPINFO:1:len)) = %xlate(lo:up:%subst(pOpInfo:1:10));
       return *on;
     else;
       return *off;
     endif;
   elseif len > pOpInfoLen; 
     return *off;
-  elseif %subst(OPINFO : len : 1) = %char(WILDCARD); // end with wildcard?
-    if %subst(OPINFO : 1: len-1) = pOpInfo;
-      return *on;
-    else;
-      return *off;
-    endif;
+  else;
   endif;
 
 end-proc;
@@ -173,7 +190,9 @@ dcl-proc doOpAud;
     dcl-parm pUser                char(10);
     dcl-parm pOpId                int(10) value;
     dcl-parm pOpInfo              char(255);
+    dcl-parm pOpInfoLen           int(10) value;
     dcl-parm pRmtIp               char(255);
+    dcl-parm pRmtIpLen            int(10) value;
     dcl-parm pAllow               int(10);
   end-pi;
 
@@ -182,11 +201,15 @@ dcl-proc doOpAud;
   open(E) OPAUD;
 
   if not %error;
+    dsOpAud.USR = *blanks;
+    dsOpAud.OPINFO = *blanks;
+    dsOpAud.RMTIP = *blanks;
+
     dsOpAud.DATETIME = %timestamp();
     dsOpAud.USR = pUser;
     dsOpAud.OPID = pOpId;
-    dsOpAud.OPINFO = pOpInfo;
-    dsOpAud.RMTIP = pRmtIp;
+    dsOpAud.OPINFO = %subst(pOpInfo:1:pOpInfoLen);
+    dsOpAud.RMTIP = %subst(pRmtIp:1:pRmtIpLen);
     dsOpAud.ALLOWED = pAllow;
     write(E) OPAUD.OPAUD dsOpAud;
   endif;
